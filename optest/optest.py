@@ -23,21 +23,41 @@ def rescale_weave(data, scale, offset): # basically copied from rescaleData
 
 if __name__ == "__main__":
     import sys
-    arr="np.random.random((512, %s))" % sys.argv[1]
-    code = "rescale_{0}(%s, 10, 3)"%arr
-    setup = "import numpy as np; from __main__ import rescale_{0}; " + code
-    number = 5000
-    timer = time.clock
-    ti=np.mean(timeit.repeat(arr, setup="import numpy as np",
-                        number=number, timer=timer))
-    print(np.mean(np.array(timeit.repeat(code.format("np"), setup=setup.format("np"),
-                        number=number, timer=timer))-ti))
-    print(np.mean(np.array(timeit.repeat(code.format("np_savealloc"), setup=setup.format("np_savealloc"),
-                        number=number, timer=timer))-ti))
-    print(np.mean(np.array(timeit.repeat(code.format("c"), setup=setup.format("c"),
-                        number=number, timer=timer))-ti))
-    print(np.mean(np.array(timeit.repeat(code.format("weave"), setup=setup.format("weave"),
-                        number=number, timer=timer))-ti))
+    y=int(sys.argv[1])
+    times=np.empty((4,y))
+    times2=np.empty((4,y))
+    name=['np', 'np_savealloc', 'weave', 'c']
+    for x in xrange(y):
+        arr="np.random.random((512, %d))" % 2**x
+        code = "rescale_{0}(a, 10, 3)"
+        setup = "import numpy as np; from __main__ import rescale_{0}; a=%s" % arr
+        number = 5000
+        timer = time.clock
+        repeat = 5
+        for j in xrange(len(name)):
+            c=timeit.repeat(code.format(name[j]), setup=setup.format(name[j]), number=number, timer=timer, repeat=repeat)
+            times[j,x] = np.min(c)
+            times2[j,x] = np.mean(c)
+
+    import matplotlib.pyplot as plt
+    for x in xrange(4):
+        plt.plot(2**np.array(range(y)),times[x,:])
+
+    plt.legend(name,loc=2)
+    plt.savefig('optest.png')
+    np.savetxt('result.csv',times)
+
+    plt.cla()
+
+    for x in xrange(4):
+        plt.plot(2**np.array(range(y)),times2[x,:])
+
+    plt.legend(name,loc=2)
+    plt.savefig('optest2.png')
+    np.savetxt('result2.csv',times)
+
+
+
     a=np.random.random((512, 512, 4))
     x=rescale_np(a,10,3)
     y=rescale_np_savealloc(a,10,3)
