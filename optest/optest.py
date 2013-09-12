@@ -1,6 +1,10 @@
 import time, timeit, numpy as np
 from scipy import weave
 from _pure_c import rescale_c
+from ctypes import cdll, CDLL, c_double, POINTER
+
+cdll.LoadLibrary('ctype.so')
+libc = CDLL('ctype.so')
 
 def rescale_np(data, scale, offset):
     return (data - offset) * scale
@@ -9,6 +13,14 @@ def rescale_np_savealloc(data, scale, offset):
     aux = data - offset
     aux *= scale # reuses the first array
     return aux
+
+def rescale_ctypes(data, scale, offset):
+    size = data.size
+    input = np.ascontiguousarray(data)
+    output = np.empty(data.shape, dtype=data.dtype)
+    libc.rescale(input.ctypes.data_as(POINTER(c_double)), output.ctypes.data_as(POINTER(c_double)), size, c_double(offset), c_double(scale))
+    return output
+
 
 def rescale_weave(data, scale, offset): # basically copied from rescaleData
     size = data.size
@@ -23,14 +35,14 @@ def rescale_weave(data, scale, offset): # basically copied from rescaleData
 
 if __name__ == "__main__":
     import sys
+    name=['np', 'np_savealloc', 'weave', 'c', 'ctypes']
     y=int(sys.argv[1])
-    times=np.empty((4,y))
-    times2=np.empty((4,y))
-    name=['np', 'np_savealloc', 'weave', 'c']
+    times=np.empty((len(name),y))
+    times2=np.empty((len(name),y))
     for x in xrange(y):
         arr="np.random.random((512, %d))" % 2**x
         code = "rescale_{0}(a, 10, 3)"
-        setup = "import numpy as np; from __main__ import rescale_{0}; a=%s" % arr
+        setup = "import numpy as np; from __main__ import rescale_{0}; a=%s;" % arr
         number = 5000
         timer = time.clock
         repeat = 5
@@ -40,7 +52,7 @@ if __name__ == "__main__":
             times2[j,x] = np.mean(c)
 
     import matplotlib.pyplot as plt
-    for x in xrange(4):
+    for x in xrange(len(name)):
         plt.plot(2**np.array(range(y)),times[x,:])
 
     plt.legend(name,loc=2)
@@ -49,7 +61,7 @@ if __name__ == "__main__":
 
     plt.cla()
 
-    for x in xrange(4):
+    for x in xrange(len(name)):
         plt.plot(2**np.array(range(y)),times2[x,:])
 
     plt.legend(name,loc=2)
@@ -63,7 +75,9 @@ if __name__ == "__main__":
     y=rescale_np_savealloc(a,10,3)
     z=rescale_weave(a,10,3)
     w=rescale_c(a,10,3)
+    v=rescale_ctypes(a,10,3)
     import numpy.testing as t
     t.assert_allclose(x,y)
     t.assert_allclose(x,z)
     t.assert_allclose(x,w)
+    t.assert_allclose(x,v)
